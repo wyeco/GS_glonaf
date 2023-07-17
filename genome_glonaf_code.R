@@ -1,5 +1,5 @@
-##### code for genome size + glonaf data analysis  ####
-#####   27 Nov 2021 ####
+##### code for Pysek, P., et al. (2023),  Small genome size and variation in ploidy levels support the naturalization of vascular plants but constrain their invasive spread. New Phytol. https://doi.org/10.1111/nph.19135  ####
+#####   updated 17 July 2023 ####
 rm(list = ls())
 
 library(ggplot2)
@@ -15,20 +15,18 @@ library(aod)
 library(phytools)
 library(viridis)
 
+
 setwd("./data_analysis")
 
 ## Imported data
-GenomeSize_df_final <- read.csv("GenomeSize_glnaf.csv", header = T, sep = ',')
+GenomeSize_df_final <- read.csv("GenomeSize_glonaf.csv", header = T, sep = ',')
 str(GenomeSize_df_final)
-hist(GenomeSize_df_final$no_ploidy_lev)
-hist(GenomeSize_df_final$holoploid)
 GenomeSize_df_final$PLOIDY <- as.factor(GenomeSize_df_final$PLOIDY)
 GenomeSize_df_final$taxno <- as.factor(GenomeSize_df_final$taxno)
 GenomeSize_df_final$species <- as.factor(GenomeSize_df_final$species)
 summary(GenomeSize_df_final)
 
-## obtain the phylogeny
-
+## generate the species-level phylogeny for this project  ####
 genome_taxonomy <- read.csv("./genome_taxnomy.csv", 
                             header = T, sep = ';')
 genome.tre <- phylo.maker(sp.list = genome_taxonomy, 
@@ -36,8 +34,8 @@ genome.tre <- phylo.maker(sp.list = genome_taxonomy,
 genome.phy <- genome.tre$scenario.3 
 #### phylogeny ends here
 
-####PLOT THE frequancy distribution, use the split violin plot  ####
-# the functions as below
+####PLOT THE frequancy distribution, use the split violin plot (Fig. 1)  ####
+# the functions were from: https://stackoverflow.com/questions/35717353/split-violin-plot-with-ggplot2
 GeomSplitViolin <- ggproto("GeomSplitViolin", GeomViolin, draw_group = function(self, data, ..., draw_quantiles = NULL){
   data <- transform(data, xminv = x - violinwidth * (x - xmin), xmaxv = x + violinwidth * (xmax - x))
   grp <- data[1,'group']
@@ -64,11 +62,11 @@ geom_split_violin <- function (mapping = NULL, data = NULL, stat = "ydensity", p
 }
 
 GenomeSize_df_final$taxno <- factor(GenomeSize_df_final$taxno, 
-                                   levels = c("angiosperms","gymnosp", "ferns", "lycophytes"), ordered = TRUE)
+                                    levels = c("angiosperms","gymnosp", "ferns", "lycophytes"), ordered = TRUE)
 
 ## holoploid plot  ##
 monoploid_freq <- GenomeSize_df_final %>% dplyr::filter (monoploid != "NA") %>% droplevels()  %>%
-ggplot(aes(taxno, log10(monoploid), fill=as.factor(GloNAF_incidence))) + 
+  ggplot(aes(taxno, log10(monoploid), fill=as.factor(GloNAF_incidence))) + 
   geom_split_violin(trim = TRUE,scale = "area") + 
   geom_boxplot(width = 0.2, notch = F, outlier.shape = NA, coef=0, alpha = 0.5) +
   stat_summary(fun = mean, fun.min = mean, fun.max = mean,
@@ -84,9 +82,6 @@ ggplot(aes(taxno, log10(monoploid), fill=as.factor(GloNAF_incidence))) +
                     name="Group",
                     breaks=c("1", "0"),
                     labels=c("Naturalized", "Non-naturalized"))
-pdf("Fig 1a.monoploid GS violind plot.pdf", useDingbats=FALSE, width=5, height=5)
-
-dev.off()
 
 #### holoploid plot #####
 holoploid_freq <- GenomeSize_df_final %>% filter (holoploid != "NA") %>% droplevels()  %>%
@@ -108,13 +103,21 @@ holoploid_freq <- GenomeSize_df_final %>% filter (holoploid != "NA") %>% droplev
                     labels=c("Naturalized", "Non-naturalized"))
 
 figure1_freq <-ggarrange(monoploid_freq,  holoploid_freq, ncol = 2, widths = c(1, 2), labels = c("A", "B")) # Second row with two extent plot               
-pdf("Fig1.monoploid & holoploid GS violind plot.pdf", useDingbats=FALSE, width=12, height=6)
+pdf("Fig_1.monoploid & holoploid GS violind plot.pdf", useDingbats=FALSE, width=12, height=6)
+figure1_freq
 dev.off()
-                           
+
 ### plots ends here
 
 ## test the significance between naturalized and non-naturalzied A: monoploid ########
-## monoploid angiosperm   #######
+GenomeSize_df_monoploid_final <- GenomeSize_df_final %>% filter (monoploid != "NA") %>% droplevels() #7252 species
+
+## prepare the monoploid data tree
+GenomeSize_df_monoploid_name<-levels(GenomeSize_df_monoploid_final$species)
+remove_monoploid_taxa = setdiff(genome.phy$tip.label, GenomeSize_df_monoploid_name)
+genome.monoploid.phy <- drop.tip(genome.phy,remove_monoploid_taxa)
+
+##  angiosperm   #######
 monoploid_angio <- GenomeSize_df_final %>% dplyr::filter (monoploid != "NA" & taxno == "angiosperms") %>% droplevels() 
 
 keep.spp_monoploid_angio <-levels(monoploid_angio$species)
@@ -126,10 +129,10 @@ monoploid_angio <- monoploid_angio[match(genome.monoploid.angio.phy$tip.label, m
 name.check(genome.monoploid.angio.phy, monoploid_angio)
 
 monoploid_angio_anova <- phylANOVA(genome.monoploid.angio.phy, monoploid_angio$GloNAF_incidence,
-                         monoploid_angio$monoploid,  nsim=1000, posthoc=TRUE, p.adj="bonferroni")
+                                   monoploid_angio$monoploid,  nsim=1000, posthoc=TRUE, p.adj="bonferroni")
 
 monoploid_angio_anova
-## monoploid gymnosperm
+##  gymnosperm
 monoploid_gymno <- GenomeSize_df_final %>% dplyr::filter (monoploid != "NA" & taxno == "gymnosp") %>% droplevels() 
 
 keep.spp_monoploid_gymno <-levels(monoploid_gymno$species)
@@ -143,9 +146,10 @@ name.check(genome.monoploid.gymno.phy, monoploid_gymno)
 monoploid_gymno_anova <- phylANOVA(genome.monoploid.gymno.phy, monoploid_gymno$GloNAF_incidence,
                                    monoploid_gymno$monoploid,  nsim=1000, posthoc=TRUE, p.adj="bonferroni")
 
-####  ends of monoploid anova test
+####  ends of monoploid anova test####
 
 #### test the significance between naturalized and non-naturalzied B: hoploid    #####
+## angiosperm
 holoploid_angio <- GenomeSize_df_final %>% dplyr::filter (holoploid != "NA" & taxno == "angiosperms") %>% droplevels() 
 
 keep.spp_holoploid_angio <-levels(holoploid_angio$species)
@@ -160,7 +164,7 @@ holoploid_angio_anova <- phylANOVA(genome.holoploid.angio.phy, holoploid_angio$G
                                    holoploid_angio$holoploid,  nsim=1000, posthoc=TRUE, p.adj="bonferroni")
 
 holoploid_angio_anova
-## gymnosperm holoploid 
+## gymnosperm  
 holoploid_gymno <- GenomeSize_df_final %>% dplyr::filter (holoploid != "NA" & taxno == "gymnosp") %>% droplevels() 
 keep.spp_holoploid_gymno <-levels(holoploid_gymno$species)
 remove_taxa_holoploid_gymno = setdiff(genome.holoploid.phy$tip.label, keep.spp_holoploid_gymno)
@@ -173,7 +177,7 @@ holoploid_gymno_anova <- phylANOVA(genome.holoploid.gymno.phy, holoploid_gymno$G
                                    holoploid_gymno$holoploid,  nsim=1000, posthoc=TRUE, p.adj="bonferroni")
 holoploid_gymno_anova
 
-### ferns holoploid
+### ferns 
 holoploid_fern <- GenomeSize_df_final %>% dplyr::filter (holoploid != "NA" & taxno == "ferns") %>% droplevels() 
 
 keep.spp_holoploid_fern <-levels(holoploid_fern$species)
@@ -189,7 +193,7 @@ holoploid_fern_anova <- phylANOVA(genome.holoploid.fern.phy, holoploid_fern$GloN
 
 holoploid_fern_anova
 
-### lycophytes holoploid
+### lycophytes 
 holoploid_lycophytes <- GenomeSize_df_final %>% dplyr::filter (holoploid != "NA" & taxno == "lycophytes") %>% droplevels() 
 keep.spp_holoploid_lycophytes <-levels(holoploid_lycophytes$species)
 remove_taxa_holoploid_lycophytes = setdiff(genome.holoploid.phy$tip.label, keep.spp_holoploid_lycophytes)
@@ -206,7 +210,7 @@ holoploid_lycophytes_anova
 
 ####################### frequency and violin plot end here  #######
 
-### plot the relationship between monoploid and holoploid
+### plot the relationship between monoploid and holoploid, Fig. S1
 ggplot(GenomeSize_df_final, aes(x= monoploid, y= holoploid)) +
   geom_smooth(method=lm, se= T) +
   geom_point(aes(color = PLOIDY, shape = PLOIDY), position = position_jitter(w = 0.01, h = 0.09)) + 
@@ -220,24 +224,18 @@ ggplot(GenomeSize_df_final, aes(x= monoploid, y= holoploid)) +
   labs(title="",
        x="Monoploid genome size (pg)", y = "Holoploid genome size (pg)")
 
-pdf("Fig.S holoploid GS vs. monoploid GS.pdf", useDingbats=FALSE, width=6, height=6)
+pdf("Fig.S1 holoploid GS vs. monoploid GS.pdf", useDingbats=FALSE, width=6, height=6)
 
 dev.off()
 
-###########  test the monoploid gs and naturalization success  #############
-GenomeSize_df_monoploid_final <- GenomeSize_df_final %>% filter (monoploid != "NA") %>% droplevels() #7252 species
-
-## prepare the monoploid data tree
-GenomeSize_df_monoploid_name<-levels(GenomeSize_df_monoploid_final$species)
-remove_monoploid_taxa = setdiff(genome.phy$tip.label, GenomeSize_df_monoploid_name)
-genome.monoploid.phy <- drop.tip(genome.phy,remove_monoploid_taxa)
+###########  test the monoploid gs and naturalization success Fig. 2 & Table 1 (part) #############
 
 ### regression analyses only globally ######
 GenomeSize_df_monoploid_final = GenomeSize_df_monoploid_final[(GenomeSize_df_monoploid_final$species %in% genome.monoploid.phy$tip.label), ]
 row.names(GenomeSize_df_monoploid_final) = GenomeSize_df_monoploid_final$species
 GenomeSize_df_monoploid_final <- GenomeSize_df_monoploid_final[match(genome.monoploid.phy$tip.label, GenomeSize_df_monoploid_final$species),]
 name.check(genome.monoploid.phy, GenomeSize_df_monoploid_final )
-                           
+
 range_1.1 <- function(x){2*((x-min(x))/(max(x)-min(x)))-1}  ###stardardized
 ####### IA monoploid vs. incidence starts here ######
 
@@ -268,7 +266,7 @@ genome.phyloglm.q.model <- phyloglm(GloNAF_incidence ~ range_1.1(log10(monoploid
 summary(genome.global.monoploid.model)
 summary(genome.phyloglm.q.model)
 
- ## prepare new data to plot the prediction
+## prepare new data to plot the prediction
 New_monoploid <- data.frame( monoploid = rep(seq(from = 0.06633,to = 152.2, length = 5000),6))
 X <- model.matrix(~ range_1.1(log10(monoploid)) +
                     I(range_1.1(log10(monoploid))^2), data = New_monoploid)
@@ -311,9 +309,9 @@ qqline(resid(genome.monoploid.extent.model))
 
 ####quadratic model
 genome.monoploid.extent.q.model <- phylolm(range_1.1(log10(reg_nat_total)) ~ range_1.1(log10(monoploid)) +
-                                           I(range_1.1(log10(monoploid))^2), 
+                                             I(range_1.1(log10(monoploid))^2), 
                                            phy = genome.monoploid.extent.phy, data = genome.monoploid.extent.data,
-                                         method = "lambda")
+                                           method = "lambda")
 
 summary(genome.monoploid.extent.q.model)
 plot(genome.monoploid.extent.q.model)
@@ -361,9 +359,9 @@ qqline(resid(genome.monoploid.invasive.extent.model))
 
 ####quadratic  model
 genome.monoploid.extent.invasive.q.model <- phylolm(range_1.1(log10(reg_no_invasive)) ~ range_1.1(log10(monoploid)) +
-                                             I(range_1.1(log10(monoploid))^2), 
-                                             phy = genome.extent.invasive.monoploid.phy, data = genome.global.extent.invasive.data,
-                                           method = "lambda")
+                                                      I(range_1.1(log10(monoploid))^2), 
+                                                    phy = genome.extent.invasive.monoploid.phy, data = genome.global.extent.invasive.data,
+                                                    method = "lambda")
 
 summary(genome.monoploid.extent.invasive.q.model)
 plot(genome.monoploid.extent.invasive.q.model)
@@ -382,7 +380,7 @@ New_monoploid$Pred.q.ext.inv <- X2  %*% coefficients(genome.monoploid.extent.inv
 New_monoploid$SE.ext.inv <- sqrt(diag(X1 %*%vcov(genome.monoploid.invasive.extent.model) %*% t(X1)))
 
 
-#######  plot the results with ploidy level shown ################
+#######  plot the monoploid GS results with ploidy level Fig. 2 ################
 p_nat_incidence_ploidy <- ggplot(GenomeSize_df_monoploid_final,aes(x= range_1.1(log10(monoploid)), y=GloNAF_incidence)) +
   geom_point(aes(color = PLOIDY, shape = taxno), position = position_jitter(w = 0.01, h = 0.09)) + 
   scale_color_viridis(discrete=TRUE, direction = 1) +
@@ -420,9 +418,9 @@ p_naturalization_extent_ploidy <- ggplot(genome.monoploid.extent.data,aes(x= ran
 
 
 p_invasive_extent_ploidy <- ggplot(genome.global.extent.invasive.data,
-                            aes(x= range_1.1(log10(monoploid)), y= range_1.1(log10(reg_no_invasive)))) +
+                                   aes(x= range_1.1(log10(monoploid)), y= range_1.1(log10(reg_no_invasive)))) +
   geom_point(aes(color = PLOIDY, shape = taxno),position = position_jitter(w = 0.01, h = 0.09)) + 
-   scale_color_viridis(discrete=TRUE, direction = 1) +
+  scale_color_viridis(discrete=TRUE, direction = 1) +
   scale_shape_manual(values=c(3, 16, 17))+
   geom_line(data = New_monoploid, aes(x= range_1.1(log10(monoploid)), y = Pred.ext.inv),size=1) +
   geom_line(data = New_monoploid, aes(x= range_1.1(log10(monoploid)), y = Pred.q.ext.inv),size=1, color = "red") +
@@ -438,18 +436,18 @@ p_invasive_extent_ploidy <- ggplot(genome.global.extent.invasive.data,
   ggtitle("(c)")
 
 figure2_ploidy <-ggarrange(p_nat_incidence_ploidy,                                                 # First row with incidence plot
-                    ggarrange(p_naturalization_extent_ploidy, p_invasive_extent_ploidy, ncol = 2, labels = c("B", "C")), # Second row with two extent plot
-                    nrow = 2, heights = c(0.8, 1),  ## adjust height
-                    labels = "A"  )  
+                           ggarrange(p_naturalization_extent_ploidy, p_invasive_extent_ploidy, ncol = 2, labels = c("B", "C")), # Second row with two extent plot
+                           nrow = 2, heights = c(0.8, 1),  ## adjust height
+                           labels = "A"  )  
 
 
 pdf("Fig 2.monoploid GS incidence & extent_ploid.pdf", useDingbats=FALSE, width=12, height=9)
 figure2_ploidy
 dev.off()
-### monoploid ends here
-                           
-                           
-############################   II holoploid  ##############
+### monoploid ends here  #####
+
+
+############################   II holoploid Fig. 3 & Table 1 (part) ##############
 #### holoploid GS vs. naturalization success  starts here #######
 GenomeSize_df_final_holoploid <- GenomeSize_df_final %>% filter (holoploid != "NA") %>% droplevels()  
 
@@ -474,12 +472,12 @@ genome.global.holoploid.model <- phyloglm(GloNAF_incidence ~ range_1.1(log10(hol
 summary(genome.global.holoploid.model)
 ####quadratic  model
 genome.phyloglm.q.holo.model <- phyloglm(GloNAF_incidence ~ range_1.1(log10(holoploid)) +
-                                      I(range_1.1(log10(holoploid))^2), 
-                                    phy = genome.holoploid.phy, data = GenomeSize_df_holoploid_final, 
-                                    method = c("logistic_MPLE","logistic_IG10","poisson_GEE"),
-                                    btol = 10, log.alpha.bound = 4,
-                                    start.beta=NULL, start.alpha=NULL,
-                                    boot = 0, full.matrix = TRUE)
+                                           I(range_1.1(log10(holoploid))^2), 
+                                         phy = genome.holoploid.phy, data = GenomeSize_df_holoploid_final, 
+                                         method = c("logistic_MPLE","logistic_IG10","poisson_GEE"),
+                                         btol = 10, log.alpha.bound = 4,
+                                         start.beta=NULL, start.alpha=NULL,
+                                         boot = 0, full.matrix = TRUE)
 
 summary(genome.phyloglm.q.holo.model)
 summary(genome.global.holoploid.model)
@@ -487,7 +485,7 @@ summary(genome.global.holoploid.model)
 ## prepare new data to plot the prediction
 New_hololoid <- data.frame( holoploid = rep(seq(from = 0.1326,to = 304.40, length = 5000),6))
 X.holo <- model.matrix(~ range_1.1(log10(holoploid)) +
-                    I(range_1.1(log10(holoploid))^2), data = New_hololoid)
+                         I(range_1.1(log10(holoploid))^2), data = New_hololoid)
 X1.holo <- model.matrix(~ range_1.1(log10(holoploid)), data = New_hololoid)
 New_hololoid$Pred <- X.holo %*% coefficients(genome.phyloglm.q.holo.model)#model coefficients
 New_hololoid$Pred.linear <- X1.holo %*% coefficients(genome.global.holoploid.model)#model coefficients
@@ -557,12 +555,12 @@ qqline(resid(genome.holoploid.extent.q.model))
 X1.holo.nat.ext <- model.matrix(~ range_1.1(log10(holoploid)), data = New_hololoid)
 New_hololoid$Pred.ext <- X1.holo.nat.ext %*% coefficients(genome.holoploid.extent.model)#model coefficients
 X2.holo.nat.ext <- model.matrix(~ range_1.1(log10(holoploid)) +
-                     I(range_1.1(log10(holoploid))^2), data = New_hololoid)
+                                  I(range_1.1(log10(holoploid))^2), data = New_hololoid)
 New_hololoid$Pred.q.ext <- X2.holo.nat.ext %*% coefficients(genome.holoploid.extent.q.model)#model coefficients
 New_hololoid$SE.ext <- sqrt(diag(X1.holo.nat.ext %*%vcov(genome.holoploid.extent.model) %*% t(X1.holo.nat.ext)))
 p_naturalization_holo_extent <- ggplot(genome.holoploid.extent.data,aes(x= range_1.1(log10(holoploid)), y= range_1.1(log10(reg_nat_total)))) +
   geom_point(aes(color = PLOIDY, shape = taxno),position = position_jitter(w = 0.01, h = 0.09)) + 
- # scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))+
+  # scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))+
   scale_color_viridis(discrete=TRUE, direction = 1) +
   scale_shape_manual(values=c(3, 16, 17,5))+
   #geom_smooth(method = "lm") +
@@ -620,12 +618,12 @@ plot(genome.holoploid.extent.invasive.q.model)
 X1.holo <- model.matrix(~ range_1.1(log10(holoploid)), data = New_hololoid)
 New_hololoid$Pred.ext.inv <- X1.holo %*% coefficients(genome.holoploid.invasive.extent.model)#model coefficients
 X.holo <- model.matrix(~ range_1.1(log10(holoploid)) +
-                     I(range_1.1(log10(holoploid))^2), data = New_hololoid)
+                         I(range_1.1(log10(holoploid))^2), data = New_hololoid)
 New_hololoid$Pred.q.ext.inv <- X.holo  %*% coefficients(genome.holoploid.extent.invasive.q.model)#model coefficients
 
 ##plot
 p_invasive_holo_extent <- ggplot(genome.global.holo.extent.invasive.data,
-                            aes(x= range_1.1(log10(holoploid)), y= range_1.1(log10(reg_no_invasive)))) +
+                                 aes(x= range_1.1(log10(holoploid)), y= range_1.1(log10(reg_no_invasive)))) +
   geom_point(aes(color = PLOIDY, shape = taxno),position = position_jitter(w = 0.01, h = 0.09)) + 
   scale_color_viridis(discrete=TRUE, direction = 1) +
   scale_shape_manual(values=c(3, 16, 17,5))+
@@ -643,17 +641,17 @@ p_invasive_holo_extent <- ggplot(genome.global.holo.extent.invasive.data,
   ggtitle("(c)")
 
 figure3_holo <-ggarrange(p_nat_holo_incidence,                                                 # First row with incidence plot
-                    ggarrange(p_naturalization_holo_extent, p_invasive_holo_extent, ncol = 2, labels = c("B", "C")), # Second row with two extent plot
-                    nrow = 2, heights = c(0.8, 1),  ## adjust height
-                    labels = "A"  )                                      # Labels of the incidence plot
+                         ggarrange(p_naturalization_holo_extent, p_invasive_holo_extent, ncol = 2, labels = c("B", "C")), # Second row with two extent plot
+                         nrow = 2, heights = c(0.8, 1),  ## adjust height
+                         labels = "A"  )                                      # Labels of the incidence plot
 
 
 pdf("Fig 3.holoploid GS incidence & extent.pdf", useDingbats=FALSE, width=12, height=9)
 figure3_holo
 dev.off()
+######### Fig. 3 ends here  #########
 
-
-######  II NO.of ploidy level   #######
+######  II NO.of ploidy level Fig. 4A  #######
 
 summary(GenomeSize_df_final)
 hist(GenomeSize_df_final$no_ploidy_lev)
@@ -682,7 +680,9 @@ X_ploidy <- model.matrix(~ no_ploidy_lev, data = new_ploidy_data)
 new_ploidy_data$Pred <- X_ploidy %*% coefficients(genome.ploidy.model)#model coefficients
 new_ploidy_data$SE <- sqrt(  diag(X_ploidy %*%vcov(genome.ploidy.model) %*% t(X_ploidy))  )
 
-p_ploidy_nat_incidence <-ggplot(genome_ploidy_data,aes(x= no_ploidy_lev, y= GloNAF_incidence )) +
+
+## plot Fig. 4a
+p_ploidy_nat_incidence <-ggplot(genome_ploidy_data,aes(x= no_ploidy_lev, y= GloNAF_incidence )) +  
   geom_point(aes(color = taxno, shape = taxno),position = position_jitter(w = 0.4, h = 0.2)) + 
   scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))+
   scale_shape_manual(values=c(3, 16, 17))+
@@ -733,16 +733,17 @@ X_ploidy <- model.matrix(~ no_ploidy_lev, data = new_ploidy_data)
 new_ploidy_data$Pred.ext <- X_ploidy %*% coefficients(genome.ploidy.extent.model)#model coefficients
 
 
+## plot Fig. 4c
 p_ploidy_nat_extent <- 
-ggplot(genome_ploidy_ext_data,aes(x= no_ploidy_lev, y= log10(reg_nat_total))) +
- 
+  ggplot(genome_ploidy_ext_data,aes(x= no_ploidy_lev, y= log10(reg_nat_total))) +
+  
   geom_point(aes(color = taxno, shape = taxno),position = position_jitter(w = 0.4, h = 0.2)) + 
-
+  
   scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))+
   scale_shape_manual(values=c(3, 16, 17))+
-
+  
   geom_line(data = new_ploidy_data, aes(x= no_ploidy_lev, y = Pred.ext),size=1) +
-
+  
   theme_classic() + 
   coord_cartesian(ylim = c(0,2.8))+ # does not remove points
   scale_x_continuous(breaks=seq(1,6,1)) +
@@ -753,59 +754,11 @@ ggplot(genome_ploidy_ext_data,aes(x= no_ploidy_lev, y= log10(reg_nat_total))) +
   theme(plot.title = element_text(size = 12, face = "bold"),
         legend.title=element_text(size=14, face = "bold"), 
         legend.text=element_text(size=12, face = "bold")) +
-  ggtitle("(b)")
-
-###### invasive extent
-genome_ploidy_invasive_data <-   genome_ploidy_data %>%  filter (reg_no_invasive >0) %>% droplevels()
-summary(genome_ploidy_invasive_data)
-##prepare the phy
-keep.ploid.invasivespp <-levels(genome_ploidy_invasive_data$species)
-remove_ploidy.invasivetaxa = setdiff(genome.phy$tip.label, keep.ploid.invasivespp)
-genome.ploidy.invasive.phy <- drop.tip(genome.phy,remove_ploidy.invasivetaxa)
-genome_ploidy_invasive_data = genome_ploidy_invasive_data[(genome_ploidy_invasive_data$species %in% genome.ploidy.invasive.phy$tip.label), ]
-
-row.names(genome_ploidy_invasive_data) = genome_ploidy_invasive_data$species
-name.check(genome.ploidy.invasive.phy, genome_ploidy_invasive_data)
-str(genome_ploidy_invasive_data)
-summary(genome_ploidy_invasive_data)
-genome.ploidy.invasiveent.model <- phylolm(log10(reg_no_invasive) ~ no_ploidy_lev,
-                                           phy = genome.ploidy.invasive.phy, data = genome_ploidy_invasive_data, 
-                                           method = "lambda")
-
-summary(genome.ploidy.invasiveent.model)
-plot(genome.ploidy.invasiveent.model)
-
-qplot(range_1.1(log10(genome_ploidy_invasive_data$reg_no_invasive)), residuals(genome.ploidy.invasiveent.model))
-hist(residuals(genome.ploidy.invasiveent.model))
-plot(density(resid(genome.ploidy.invasiveent.model)))
-qqnorm(resid(genome.ploidy.invasiveent.model)) 
-qqline(resid(genome.ploidy.invasiveent.model))
-
-new_ploidy_data <-  data.frame( no_ploidy_lev = rep(seq(from = 1,to = 6, length = 5000),6))
-X_ploidy <- model.matrix(~ no_ploidy_lev, data = new_ploidy_data)
-new_ploidy_data$Pred.ext <- X_ploidy %*% coefficients(genome.ploidy.extent.model)#model coefficients
-new_ploidy_data$SE.ext <- sqrt(  diag(X_ploidy %*%vcov(genome.ploidy.extent.model) %*% t(X_ploidy))  )
-
-ggplot(genome_ploidy_invasive_data,aes(x= no_ploidy_lev, y= log10(reg_no_invasive))) +
-  geom_point(aes(color = taxno, shape = taxno),position = position_jitter(w = 0.4, h = 0.2)) + 
-  scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))+
-  scale_shape_manual(values=c(3, 16, 17))+
-  geom_smooth(method = "lm") +
-  geom_abline(aes(intercept=cc.genome_ploidy.inv_ext[1],slope= cc.genome_ploidy.inv_ext[2])) +
-  theme_classic() + 
-  # coord_cartesian(ylim = c(0,2))+ # does not remove points
-  scale_x_continuous(breaks=seq(1,6,1)) +
-  labs(y="Invasion extent",x="Number of ploidy level") +
-  theme(legend.position = "none") +
-  theme(axis.text=element_text(size=12,face="bold"),
-        axis.title=element_text(size=14,face="bold")) +
-  theme(plot.title = element_text(size = 12, face = "bold"),
-        legend.title=element_text(size=14, face = "bold"), 
-        legend.text=element_text(size=12, face = "bold")) +
   ggtitle("(c)")
 
+
 figure3_0 <-ggarrange(p_ploidy_nat_incidence,  p_ploidy_nat_extent,                                          
-                       nrow = 1, widths = c(1, 0.8),  ## adjust height
+                      nrow = 1, widths = c(1, 0.8),  ## adjust height
                       labels = c("A", "B"))                                      # Labels of the incidence plot
 
 pdf("Fig 3a_b.ploidy_ incidence & extent.pdf", useDingbats=FALSE, width=12, height=9)
@@ -813,7 +766,7 @@ figure3_0
 dev.off()
 
 
-### II 6  diploid and ployploids
+###   diploid and ployploids Fig. 4B  #######
 II6 <- c("diploid", "polyploid")
 genome_ploidy_II6_data <-  genome_ploidy_data  %>%  filter (PLOIDY   %in% II6) %>% droplevels()
 summary(genome_ploidy_II6_data)
@@ -1351,7 +1304,7 @@ qqnorm(resid(genome.ploidy.gs.invasiveent.model))
 qqline(resid(genome.ploidy.gs.invasiveent.model))
 
 ##################################################
-## check the interaction between monoploid and no of ploidy level
+## check the interaction between monoploid and no. of ploidy level
 ### prepare ployploids subset
 genome_ploidy_first_2_level_inv_data <-  genome_ploidy_invasive_monoploid_final  %>%  filter (no_ploidy_lev < 3) %>% droplevels()
 summary(genome_ploidy_first_2_level_inv_data)  
@@ -1409,3 +1362,88 @@ genome.ploidy.gs.first_1_2_inv.model <- phylolm(range_1.1(log10(reg_no_invasive)
                                                 method = "lambda")
 
 summary(genome.ploidy.gs.first_1_2_inv.model)
+
+
+### plot Fig. S5  #########
+ploidy_level_new_data <- read.csv("data_ploidy_level_group.csv", header = T , sep = ';')
+summary(ploidy_level_new_data)
+str(ploidy_level_new_data)
+plot(ploidy_level_new_data$ploidy_level_single, ploidy_level_new_data$holoploid)
+
+plot(ploidy_level_data$ploidy_level_single, ploidy_level_data$monoploid)
+
+p_ploid_holoploid <- ggplot(ploidy_level_new_data, aes(x= ploidy_level_single, y= range_1.1(log10(holoploid)))) +
+  geom_smooth(method=lm, se= T) +
+  geom_point(shape = 21,size = 1.5,position = position_jitter(w = 0.1, h = 0.09)) + 
+  #scale_color_manual(values =c('#999999','#E69F00', '#56B4E9'))+
+  # scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))+
+  theme_bw() + theme(panel.grid.major = element_blank(),
+                     panel.grid.minor = element_blank(),
+                     strip.background = element_rect(colour="white", fill="white"),
+                     text = element_text(size = 16),
+                     legend.position = c(0.9,0.8)) +
+  labs(title="(A) Holoploid",
+       x="", y = "Holoploid genome size (pg)")
+
+p_ploid_monoploid <- ggplot(ploidy_level_new_data, aes(x= ploidy_level_single, y= range_1.1(log10(monoploid)))) +
+   geom_smooth(method="lm", se= T) +
+    geom_point(shape = 21,size = 1.5,position = position_jitter(w = 0.1, h = 0.09)) + 
+  #scale_color_manual(values =c('#999999','#E69F00', '#56B4E9'))+
+ # scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"))+
+  theme_bw() + theme(panel.grid.major = element_blank(),
+                     panel.grid.minor = element_blank(),
+                     strip.background = element_rect(colour="white", fill="white"),
+                     text = element_text(size = 16),
+                     legend.position = c(0.9,0.8)) +
+  labs(title="(B) Monoploid",
+       x="Ploids", y = "Monoploid genome size (pg)")
+
+
+
+summary(lm(range_1.1(log10(ploidy_level_new_data$holoploid)) ~ ploidy_level_new_data$ploidy_level_single))
+summary(lm(range_1.1(log10(ploidy_level_new_data$monoploid)) ~ ploidy_level_new_data$ploidy_level_single))
+
+figure_SX_gs_ploid <-ggarrange(p_ploid_holoploid,                                                 # First row with incidence plot
+                               p_ploid_monoploid, # Second row with two extent plot
+                                     nrow = 2  )                                      # Labels of the incidence plot
+
+pdf("Fig S5.figure_SX_gs_ploid.pdf", useDingbats=FALSE, width=12, height=9)
+figure_S5_gs_ploid  ## Fig. S5
+dev.off()
+
+##### plot Fig. S6 ############
+
+str(GenomeSize_df_monoploid_final)
+
+hist(GenomeSize_df_monoploid_final$monoploid)
+
+library(plyr)
+library(ggridges)
+mean_monoploid <- as.data.frame(ddply(GenomeSize_df_monoploid_final,
+                                      "PLOIDY", summarise, grp.mean=mean(monoploid)))
+head(mean_monoploid)
+median_monoploid <- as.data.frame(ddply(GenomeSize_df_monoploid_final, "PLOIDY",
+                                        summarise, median = median(monoploid)))
+head(median_monoploid)
+### prepare density plot 
+ggplot(GenomeSize_df_monoploid_final, aes(x=monoploid, fill =PLOIDY, color=PLOIDY)) +
+ geom_density( aes(y = 100*..count../sum(..count..)),  position="identity", alpha=.5) +
+ # geom_density(position="identity", size =1,alpha = 0.1)+
+  geom_vline(data=mean_monoploid, aes(xintercept=grp.mean, color=PLOIDY),
+             linetype="dashed", size = 1) +
+  geom_vline(data=median_monoploid, aes(xintercept=median, color=PLOIDY),
+             linetype="dotted", size =1) +
+  scale_fill_manual(values = c( "#00AFBB", "#E7B800")) +
+  scale_color_manual(values = c("#00AFBB","#E7B800")) +
+ # scale_color_brewer(palette="Dark2") +
+  theme_minimal() +
+  theme(text = element_text(size = 15),
+        legend.position = c(0.8, 0.8)) +
+  labs(title="",
+       x="Monoploid genome size (pg)")
+
+pdf("Fig.S6 monoploid distribution_ploidy type.pdf", useDingbats=FALSE, width=10, height=5)  ## Fig. S6
+
+
+dev.off()
+
